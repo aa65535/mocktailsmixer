@@ -135,13 +135,15 @@ def trigger_pour(msg_q, bottle_num, pour_time, start_delay=0):
 def signal_handler(signal, frame):
     """ Ctrl+C handler to cleanup """
 
+    for t in threading.enumerate():
+      if hasattr(t, 'shutdown_flag'):
+        # print(t.name)
+        t.shutdown_flag.set()
+
+    time.sleep(2)
+
     if PUSH_TO_TALK:
       GPIO.cleanup()
-
-    for t in threading.enumerate():
-      # print(t.name)
-      if t.name != 'MainThread':
-        t.shutdown_flag.set()
 
     print('Goodbye!')
     sys.exit(1)
@@ -158,7 +160,7 @@ def poll(assistant_thread):
 
     # get input value
     val = GPIO.input(PUSH_TO_TALK_PIN)
-    # print("input = ", in_val)
+    # print("input = ", val)
 
     # shift values
     vals[2] = vals[1]
@@ -365,7 +367,7 @@ class SubscriptionThread(Thread):
   def run(self):
     """ Poll for new messages from the pull subscription """
 
-    while True:
+    while not self.shutdown_flag.is_set():
 
       # pull messages
       results = self.subscription.pull(return_immediately=True)
@@ -427,6 +429,14 @@ class SerialThread(Thread):
         self.serial.write(str.encode(cmd))
         print('Serial sending ' + cmd)
 
+    if self.shutdown_flag.is_set():
+      for i in range(8):
+        cmd = 'b%dl!' % i
+        self.serial.write(str.encode(cmd))
+        print('Serial sending ' + cmd)
+      self.serial.write(str.encode('xo!'))
+      print('Serial sending xo!')
+
 
 if __name__ == '__main__':
 
@@ -455,6 +465,9 @@ if __name__ == '__main__':
     assistant_thread = AssistantThread(msg_q)
     assistant_thread.start()
 
+    for i in range(8):
+      msg_q.put('b%dl!' % i)
+
     # # wait for main to finish until assistant thread is done
     # assisstant_thread.join()
 
@@ -462,6 +475,6 @@ if __name__ == '__main__':
 
       # setup push to talk and start thread
       GPIO.setmode(GPIO.BOARD)
-      GPIO.setup(PUSH_TO_TALK_PIN, GPIO.IN)
+      GPIO.setup(PUSH_TO_TALK_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
       poll_thread = Thread(target=poll, args=([assistant_thread]))
       poll_thread.start()

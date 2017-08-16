@@ -153,11 +153,15 @@ class SoundDeviceStream(object):
 
     def write(self, buf):
         """Write bytes to the stream."""
-        underflow = self._audio_stream.write(buf)
-        if underflow:
-            logging.warning('SoundDeviceStream write underflow (size: %d)',
-                            len(buf))
-        return len(buf)
+        try:
+          underflow = self._audio_stream.write(buf)
+          if underflow:
+              logging.warning('SoundDeviceStream write underflow (size: %d)',
+                              len(buf))
+          return len(buf)
+        except Exception as e:
+          logging.warning('SoundDeviceStream write error: %s', e)
+          return 0
 
     def flush(self):
         if self._flush_size > 0:
